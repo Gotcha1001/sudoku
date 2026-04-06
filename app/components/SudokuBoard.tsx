@@ -1,5 +1,5 @@
-// "use client";
 
+// "use client";
 // import { useState, useEffect, useCallback, useRef } from "react";
 // import { motion, AnimatePresence } from "framer-motion";
 // import {
@@ -13,7 +13,7 @@
 //   type BoardSize,
 // } from "@/lib/sudoku";
 // import { useSoundManager } from "@/hooks/useSoundManager";
-// import { RotateCcw, Lightbulb, PenLine, Eraser } from "lucide-react";
+// import { RotateCcw, Lightbulb, PenLine, Eraser, Undo2 } from "lucide-react";
 // import confetti from "canvas-confetti";
 
 // const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard", "expert"];
@@ -50,7 +50,68 @@
 //   const [started, setStarted] = useState(false);
 //   const [finished, setFinished] = useState(false);
 //   const [shakingCell, setShakingCell] = useState<number | null>(null);
+
 //   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+//   const historyRef = useRef<
+//     Array<{
+//       board: number[];
+//       notes: Set<number>[];
+//       mistakes: number;
+//       cellIndex: number;
+//     }>
+//   >([]);
+
+//   // ====================== CONFETTI FIX ======================
+//   const fireConfetti = useCallback(() => {
+//     const count = 200;
+//     const defaults = { origin: { y: 0.7 } };
+
+//     function fire(particleRatio: number, opts: confetti.Options) {
+//       confetti({
+//         ...defaults,
+//         ...opts,
+//         particleCount: Math.floor(count * particleRatio),
+//       });
+//     }
+
+//     fire(0.25, {
+//       spread: 26,
+//       startVelocity: 55,
+//       colors: ["#2563eb", "#60a5fa"],
+//     });
+//     fire(0.2, { spread: 60, colors: ["#ffffff", "#93c5fd"] });
+//     fire(0.35, {
+//       spread: 100,
+//       decay: 0.91,
+//       scalar: 0.8,
+//       colors: ["#2563eb", "#1d4ed8"],
+//     });
+//     fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+//     fire(0.1, {
+//       spread: 120,
+//       startVelocity: 45,
+//       colors: ["#60a5fa", "#ffffff"],
+//     });
+//   }, []);
+
+//   // Ref ensures we always call the latest confetti function
+//   const fireConfettiRef = useRef<() => void>(fireConfetti);
+
+//   useEffect(() => {
+//     fireConfettiRef.current = fireConfetti;
+//   }, [fireConfetti]);
+
+//   // Trigger confetti when the puzzle is won
+//   useEffect(() => {
+//     if (finished && mistakes < MAX_MISTAKES) {
+//       // Small delay so the win overlay renders first
+//       const timeout = setTimeout(() => {
+//         fireConfettiRef.current();
+//       }, 150);
+//       return () => clearTimeout(timeout);
+//     }
+//   }, [finished, mistakes]);
+//   // =========================================================
 
 //   const startGame = useCallback(
 //     (diff: Difficulty) => {
@@ -72,6 +133,7 @@
 //       setStarted(false);
 //       setFinished(false);
 //       clearInterval(timerRef.current!);
+//       historyRef.current = [];
 //       play("gameStart");
 //     },
 //     [play],
@@ -108,6 +170,15 @@
 //         return;
 //       }
 
+//       // Save to history before making the move
+//       historyRef.current.push({
+//         board: [...board],
+//         notes: notes.map((s) => new Set(s)),
+//         mistakes,
+//         cellIndex: selected,
+//       });
+//       if (historyRef.current.length > 50) historyRef.current.shift();
+
 //       newBoard[selected] = n;
 //       const newNotes = notes.map((s) => new Set(s));
 //       newNotes[selected].clear();
@@ -120,6 +191,7 @@
 //         setNotes(newNotes);
 //         setShakingCell(selected);
 //         setTimeout(() => setShakingCell(null), 500);
+
 //         if (newMistakes >= MAX_MISTAKES) {
 //           setFinished(true);
 //           clearInterval(timerRef.current!);
@@ -128,41 +200,10 @@
 //         return;
 //       }
 
-//       const fireConfetti = () => {
-//         const count = 200;
-//         const defaults = { origin: { y: 0.7 } };
-
-//         function fire(particleRatio: number, opts: confetti.Options) {
-//           confetti({
-//             ...defaults,
-//             ...opts,
-//             particleCount: Math.floor(count * particleRatio),
-//           });
-//         }
-
-//         fire(0.25, {
-//           spread: 26,
-//           startVelocity: 55,
-//           colors: ["#2563eb", "#60a5fa"],
-//         });
-//         fire(0.2, { spread: 60, colors: ["#ffffff", "#93c5fd"] });
-//         fire(0.35, {
-//           spread: 100,
-//           decay: 0.91,
-//           scalar: 0.8,
-//           colors: ["#2563eb", "#1d4ed8"],
-//         });
-//         fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-//         fire(0.1, {
-//           spread: 120,
-//           startVelocity: 45,
-//           colors: ["#60a5fa", "#ffffff"],
-//         });
-//       };
-
 //       play("cardDeal");
 //       const affected = getAffectedIndices(selected, size);
 //       for (const idx of affected) newNotes[idx].delete(n);
+
 //       setBoard(newBoard);
 //       setNotes(newNotes);
 
@@ -171,7 +212,7 @@
 //         clearInterval(timerRef.current!);
 //         play("win");
 //         onComplete?.(elapsed + 1, hintsUsed, mistakes, difficulty);
-//         fireConfetti();
+//         // Confetti is now handled by useEffect
 //       }
 //     },
 //     [
@@ -204,9 +245,20 @@
 //     play("buttonClick");
 //   }, [selected, given, finished, board, notes, play]);
 
+//   const undo = useCallback(() => {
+//     const prev = historyRef.current.pop();
+//     if (!prev) return;
+//     setBoard(prev.board);
+//     setNotes(prev.notes);
+//     setMistakes(prev.mistakes);
+//     setSelected(prev.cellIndex);
+//     play("buttonClick");
+//   }, [play]);
+
 //   const hint = useCallback(() => {
 //     if (selected === null || given[selected] || finished) return;
 //     if (!started) setStarted(true);
+
 //     const newBoard = [...board];
 //     newBoard[selected] = solution[selected];
 //     const newGiven = [...given];
@@ -214,16 +266,19 @@
 //     const newNotes = notes.map((s) => new Set(s));
 //     const affected = getAffectedIndices(selected, size);
 //     for (const idx of affected) newNotes[idx].delete(solution[selected]);
+
 //     setBoard(newBoard);
 //     setGiven(newGiven);
 //     setNotes(newNotes);
 //     setHintsUsed((h) => h + 1);
 //     play("roomJoin");
+
 //     if (isBoardComplete(newBoard, solution)) {
 //       setFinished(true);
 //       clearInterval(timerRef.current!);
 //       play("win");
 //       onComplete?.(elapsed + 1, hintsUsed + 1, mistakes, difficulty);
+//       // Confetti handled by useEffect
 //     }
 //   }, [
 //     selected,
@@ -244,10 +299,16 @@
 
 //   useEffect(() => {
 //     const handler = (e: KeyboardEvent) => {
+//       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+//         e.preventDefault();
+//         undo();
+//         return;
+//       }
 //       const num = Number(e.key);
 //       if (num >= 1 && num <= size) enterNumber(num);
 //       if (e.key === "Backspace" || e.key === "Delete") erase();
 //       if (e.key === "n" || e.key === "N") setNoteMode((m) => !m);
+
 //       if (selected === null) return;
 //       const r = Math.floor(selected / size);
 //       const c = selected % size;
@@ -256,13 +317,14 @@
 //       if (e.key === "ArrowDown" && r < size - 1) setSelected(selected + size);
 //       if (e.key === "ArrowUp" && r > 0) setSelected(selected - size);
 //     };
+
 //     window.addEventListener("keydown", handler);
 //     return () => window.removeEventListener("keydown", handler);
-//   }, [enterNumber, erase, selected, size]);
+//   }, [enterNumber, erase, undo, selected, size]);
 
 //   const isWon = finished && mistakes < MAX_MISTAKES;
 
-//   // Count how many of each digit are placed (to grey out full digits in numpad)
+//   // Count how many of each digit are placed
 //   const digitCounts = Array(size + 1).fill(0);
 //   board.forEach((v) => {
 //     if (v) digitCounts[v]++;
@@ -272,15 +334,12 @@
 //     selected !== null
 //       ? new Set(getAffectedIndices(selected, size))
 //       : new Set<number>();
+
 //   const selectedValue = selected !== null ? board[selected] : 0;
 
-//   // Box dimensions for border logic
 //   const [boxR, boxC] = BOX_DIMS[size];
+//   const noteGridCols = boxC;
 
-//   // Notes grid columns — √size for 9×9 (3), 2 rows for 6×6, 3 rows for 12×12
-//   const noteGridCols = boxC; // notes mini-grid always matches box column count
-
-//   // Numpad: split into rows of 6 max for larger boards
 //   const numpadNumbers = Array.from({ length: size }, (_, i) => i + 1);
 //   const numpadRows: number[][] = [];
 //   const ROW_SIZE = size <= 9 ? size : 6;
@@ -332,7 +391,6 @@
 //               selectedValue > 0 && val === selectedValue && !isSelected;
 //             const isError = !given[i] && val > 0 && val !== solution[i];
 
-//             // Thick borders at box boundaries
 //             const thickRight = (c + 1) % boxC === 0 && c !== size - 1;
 //             const thickBottom = (r + 1) % boxR === 0 && r !== size - 1;
 //             const borderR = thickRight
@@ -360,7 +418,21 @@
 //               >
 //                 {val > 0 ? (
 //                   <motion.span
-//                     className={`font-semibold leading-none ...`}
+//                     className={`font-semibold leading-none
+//                       ${
+//                         size === 6
+//                           ? "text-[clamp(12px,3.5vw,22px)]"
+//                           : size === 9
+//                             ? "text-[clamp(10px,2.5vw,18px)]"
+//                             : "text-[clamp(7px,1.6vw,13px)]"
+//                       }
+//                       ${
+//                         given[i]
+//                           ? "text-gray-800 dark:text-white"
+//                           : isError
+//                             ? "text-red-500 dark:text-red-400"
+//                             : "text-blue-600 dark:text-blue-300"
+//                       }`}
 //                     animate={
 //                       shakingCell === i
 //                         ? {
@@ -394,14 +466,14 @@
 //                         <span
 //                           key={n}
 //                           className={`flex items-center justify-center font-medium leading-none
-//                           ${
-//                             size === 6
-//                               ? "text-[clamp(5px,1.4vw,10px)]"
-//                               : size === 9
-//                                 ? "text-[clamp(4px,1.1vw,8px)]"
-//                                 : "text-[clamp(3px,0.8vw,6px)]"
-//                           }
-//                           text-gray-400 dark:text-blue-500`}
+//                             ${
+//                               size === 6
+//                                 ? "text-[clamp(5px,1.4vw,10px)]"
+//                                 : size === 9
+//                                   ? "text-[clamp(4px,1.1vw,8px)]"
+//                                   : "text-[clamp(3px,0.8vw,6px)]"
+//                             }
+//                             text-gray-400 dark:text-blue-500`}
 //                         >
 //                           {notes[i].has(n) ? n : ""}
 //                         </span>
@@ -456,7 +528,7 @@
 //         </AnimatePresence>
 //       </div>
 
-//       {/* Numpad — single row for 6/9, two rows of 6 for 12 */}
+//       {/* Numpad */}
 //       <div className="flex flex-col gap-1.5 mt-3">
 //         {numpadRows.map((row, rowIdx) => (
 //           <div
@@ -493,6 +565,12 @@
 //           <Eraser size={14} /> Erase
 //         </button>
 //         <button
+//           onClick={undo}
+//           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all"
+//         >
+//           <Undo2 size={14} /> Undo
+//         </button>
+//         <button
 //           onClick={() => {
 //             setNoteMode((m) => !m);
 //             play("buttonClick");
@@ -518,6 +596,7 @@
 //         >
 //           <RotateCcw size={14} /> New
 //         </button>
+
 //         {/* Mistake dots */}
 //         <div className="flex items-center gap-1">
 //           {[0, 1, 2].map((i) => (
@@ -533,6 +612,9 @@
 //     </div>
 //   );
 // }
+
+
+
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -595,83 +677,48 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
     }>
   >([]);
 
-  // ====================== CONFETTI FIX ======================
+  // Enhanced Confetti (kept for wins)
   const fireConfetti = useCallback(() => {
-    const count = 200;
-    const defaults = { origin: { y: 0.7 } };
+    const defaults = { origin: { y: 0.6 }, gravity: 0.75, ticks: 280, decay: 0.93 };
+    const colors = ["#a855f7", "#c026d3", "#ec4899", "#3b82f6", "#60a5fa", "#eab308", "#22c55e", "#ffffff"];
 
-    function fire(particleRatio: number, opts: confetti.Options) {
-      confetti({
-        ...defaults,
-        ...opts,
-        particleCount: Math.floor(count * particleRatio),
-      });
+    function burst(spread: number, count: number, opts: confetti.Options = {}) {
+      confetti({ ...defaults, ...opts, particleCount: count, spread, colors, shapes: ["circle", "star"] as const });
     }
 
-    fire(0.25, {
-      spread: 26,
-      startVelocity: 55,
-      colors: ["#2563eb", "#60a5fa"],
-    });
-    fire(0.2, { spread: 60, colors: ["#ffffff", "#93c5fd"] });
-    fire(0.35, {
-      spread: 100,
-      decay: 0.91,
-      scalar: 0.8,
-      colors: ["#2563eb", "#1d4ed8"],
-    });
-    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-    fire(0.1, {
-      spread: 120,
-      startVelocity: 45,
-      colors: ["#60a5fa", "#ffffff"],
-    });
+    burst(360, 140, { startVelocity: 55 });
+    burst(360, 90, { startVelocity: 38 });
+    setTimeout(() => burst(140, 70, { origin: { x: 0.15, y: 0.65 } }), 80);
+    setTimeout(() => burst(140, 70, { origin: { x: 0.85, y: 0.65 } }), 160);
   }, []);
 
-  // Ref ensures we always call the latest confetti function
   const fireConfettiRef = useRef<() => void>(fireConfetti);
+  useEffect(() => { fireConfettiRef.current = fireConfetti; }, [fireConfetti]);
 
-  useEffect(() => {
-    fireConfettiRef.current = fireConfetti;
-  }, [fireConfetti]);
-
-  // Trigger confetti when the puzzle is won
   useEffect(() => {
     if (finished && mistakes < MAX_MISTAKES) {
-      // Small delay so the win overlay renders first
-      const timeout = setTimeout(() => {
-        fireConfettiRef.current();
-      }, 150);
-      return () => clearTimeout(timeout);
+      setTimeout(() => fireConfettiRef.current(), 180);
     }
   }, [finished, mistakes]);
-  // =========================================================
 
-  const startGame = useCallback(
-    (diff: Difficulty) => {
-      const newPuzzle = generatePuzzle(diff);
-      setBoard(newPuzzle.board);
-      setSolution(newPuzzle.solution);
-      setGiven(newPuzzle.given);
-      setSize(newPuzzle.size);
-      setNotes(
-        Array(newPuzzle.size * newPuzzle.size)
-          .fill(null)
-          .map(() => new Set<number>()),
-      );
-      setSelected(null);
-      setNoteMode(false);
-      setMistakes(0);
-      setHintsUsed(0);
-      setElapsed(0);
-      setStarted(false);
-      setFinished(false);
-      clearInterval(timerRef.current!);
-      historyRef.current = [];
-      play("gameStart");
-    },
-    [play],
-  );
+  const startGame = useCallback((diff: Difficulty) => {
+    const newPuzzle = generatePuzzle(diff);
+    setBoard(newPuzzle.board);
+    setSolution(newPuzzle.solution);
+    setGiven(newPuzzle.given);
+    setSize(newPuzzle.size);
+    setNotes(Array(newPuzzle.size * newPuzzle.size).fill(null).map(() => new Set()));
+    setSelected(null);
+    setNoteMode(false);
+    setMistakes(0);
+    setHintsUsed(0);
+    setElapsed(0);
+    setStarted(false);
+    setFinished(false);
+    clearInterval(timerRef.current!);
+    historyRef.current = [];
+    play("gameStart");
+  }, [play]);
 
   useEffect(() => {
     if (started && !finished) {
@@ -680,100 +727,72 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
     return () => clearInterval(timerRef.current!);
   }, [started, finished]);
 
-  const enterNumber = useCallback(
-    (n: number) => {
-      if (selected === null || given[selected] || finished) return;
-      if (!started) setStarted(true);
+  const enterNumber = useCallback((n: number) => {
+    if (selected === null || given[selected] || finished) return;
+    if (!started) setStarted(true);
 
-      if (noteMode) {
-        if (board[selected]) return;
-        play("buttonClick");
-        setNotes((prev) => {
-          const next = prev.map((s) => new Set(s));
-          if (next[selected].has(n)) next[selected].delete(n);
-          else next[selected].add(n);
-          return next;
-        });
-        return;
-      }
-
-      const newBoard = [...board];
-      if (newBoard[selected] === n) {
-        newBoard[selected] = 0;
-        setBoard(newBoard);
-        return;
-      }
-
-      // Save to history before making the move
-      historyRef.current.push({
-        board: [...board],
-        notes: notes.map((s) => new Set(s)),
-        mistakes,
-        cellIndex: selected,
+    if (noteMode) {
+      if (board[selected]) return;
+      play("buttonClick");
+      setNotes((prev) => {
+        const next = prev.map((s) => new Set(s));
+        next[selected].has(n) ? next[selected].delete(n) : next[selected].add(n);
+        return next;
       });
-      if (historyRef.current.length > 50) historyRef.current.shift();
+      return;
+    }
 
-      newBoard[selected] = n;
-      const newNotes = notes.map((s) => new Set(s));
-      newNotes[selected].clear();
+    const newBoard = [...board];
+    if (newBoard[selected] === n) {
+      newBoard[selected] = 0;
+      setBoard(newBoard);
+      return;
+    }
 
-      if (n !== solution[selected]) {
-        const newMistakes = mistakes + 1;
-        play("cardDraw");
-        setMistakes(newMistakes);
-        setBoard(newBoard);
-        setNotes(newNotes);
-        setShakingCell(selected);
-        setTimeout(() => setShakingCell(null), 500);
+    historyRef.current.push({ board: [...board], notes: notes.map(s => new Set(s)), mistakes, cellIndex: selected });
+    if (historyRef.current.length > 50) historyRef.current.shift();
 
-        if (newMistakes >= MAX_MISTAKES) {
-          setFinished(true);
-          clearInterval(timerRef.current!);
-          play("lose");
-        }
-        return;
-      }
+    newBoard[selected] = n;
+    const newNotes = notes.map((s) => new Set(s));
+    newNotes[selected].clear();
 
-      play("cardDeal");
-      const affected = getAffectedIndices(selected, size);
-      for (const idx of affected) newNotes[idx].delete(n);
-
+    if (n !== solution[selected]) {
+      const newMistakes = mistakes + 1;
+      play("cardDraw");
+      setMistakes(newMistakes);
       setBoard(newBoard);
       setNotes(newNotes);
-
-      if (isBoardComplete(newBoard, solution)) {
+      setShakingCell(selected);
+      setTimeout(() => setShakingCell(null), 500);
+      if (newMistakes >= MAX_MISTAKES) {
         setFinished(true);
         clearInterval(timerRef.current!);
-        play("win");
-        onComplete?.(elapsed + 1, hintsUsed, mistakes, difficulty);
-        // Confetti is now handled by useEffect
+        play("lose");
       }
-    },
-    [
-      selected,
-      given,
-      finished,
-      started,
-      noteMode,
-      board,
-      notes,
-      solution,
-      size,
-      mistakes,
-      hintsUsed,
-      elapsed,
-      difficulty,
-      onComplete,
-      play,
-    ],
-  );
+      return;
+    }
+
+    play("cardDeal");
+    const affected = getAffectedIndices(selected, size);
+    for (const idx of affected) newNotes[idx].delete(n);
+
+    setBoard(newBoard);
+    setNotes(newNotes);
+
+    if (isBoardComplete(newBoard, solution)) {
+      setFinished(true);
+      clearInterval(timerRef.current!);
+      play("win");
+      onComplete?.(elapsed + 1, hintsUsed, mistakes, difficulty);
+    }
+  }, [selected, given, finished, started, noteMode, board, notes, solution, size, mistakes, hintsUsed, elapsed, difficulty, onComplete, play]);
 
   const erase = useCallback(() => {
     if (selected === null || given[selected] || finished) return;
     const newBoard = [...board];
     newBoard[selected] = 0;
     setBoard(newBoard);
-    const newNotes = notes.map((s) => new Set(s));
+    const newNotes = notes.map(s => new Set(s));
     newNotes[selected].clear();
     setNotes(newNotes);
     play("buttonClick");
@@ -795,16 +814,15 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
 
     const newBoard = [...board];
     newBoard[selected] = solution[selected];
-    const newGiven = [...given];
-    newGiven[selected] = true;
-    const newNotes = notes.map((s) => new Set(s));
+    const newGiven = [...given]; newGiven[selected] = true;
+    const newNotes = notes.map(s => new Set(s));
     const affected = getAffectedIndices(selected, size);
     for (const idx of affected) newNotes[idx].delete(solution[selected]);
 
     setBoard(newBoard);
     setGiven(newGiven);
     setNotes(newNotes);
-    setHintsUsed((h) => h + 1);
+    setHintsUsed(h => h + 1);
     play("roomJoin");
 
     if (isBoardComplete(newBoard, solution)) {
@@ -812,36 +830,16 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
       clearInterval(timerRef.current!);
       play("win");
       onComplete?.(elapsed + 1, hintsUsed + 1, mistakes, difficulty);
-      // Confetti handled by useEffect
     }
-  }, [
-    selected,
-    given,
-    finished,
-    started,
-    board,
-    solution,
-    notes,
-    size,
-    elapsed,
-    hintsUsed,
-    mistakes,
-    difficulty,
-    onComplete,
-    play,
-  ]);
+  }, [selected, given, finished, started, board, solution, notes, size, elapsed, hintsUsed, mistakes, difficulty, onComplete, play]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        e.preventDefault();
-        undo();
-        return;
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undo(); return; }
       const num = Number(e.key);
       if (num >= 1 && num <= size) enterNumber(num);
       if (e.key === "Backspace" || e.key === "Delete") erase();
-      if (e.key === "n" || e.key === "N") setNoteMode((m) => !m);
+      if (e.key === "n" || e.key === "N") setNoteMode(m => !m);
 
       if (selected === null) return;
       const r = Math.floor(selected / size);
@@ -851,26 +849,17 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
       if (e.key === "ArrowDown" && r < size - 1) setSelected(selected + size);
       if (e.key === "ArrowUp" && r > 0) setSelected(selected - size);
     };
-
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [enterNumber, erase, undo, selected, size]);
 
   const isWon = finished && mistakes < MAX_MISTAKES;
 
-  // Count how many of each digit are placed
   const digitCounts = Array(size + 1).fill(0);
-  board.forEach((v) => {
-    if (v) digitCounts[v]++;
-  });
+  board.forEach((v) => { if (v) digitCounts[v]++; });
 
-  const affectedBySelected =
-    selected !== null
-      ? new Set(getAffectedIndices(selected, size))
-      : new Set<number>();
-
+  const affectedBySelected = selected !== null ? new Set(getAffectedIndices(selected, size)) : new Set<number>();
   const selectedValue = selected !== null ? board[selected] : 0;
-
   const [boxR, boxC] = BOX_DIMS[size];
   const noteGridCols = boxC;
 
@@ -883,26 +872,16 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
 
   return (
     <div className="rounded-2xl overflow-hidden backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border border-white/30 dark:border-white/10 shadow-2xl p-4">
-      {/* Difficulty + timer row */}
+      {/* Difficulty + Timer */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {DIFFICULTIES.map((d) => (
           <button
             key={d}
-            onClick={() => {
-              setDifficulty(d);
-              startGame(d);
-            }}
+            onClick={() => { setDifficulty(d); startGame(d); }}
             className={`px-4 py-1.5 rounded-xl text-sm font-medium capitalize transition-all border
-              ${
-                difficulty === d
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"
-              }`}
+              ${difficulty === d ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white border-transparent" : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"}`}
           >
-            {d}
-            <span className="ml-1 text-[10px] opacity-60">
-              {DIFFICULTY_SIZE[d]}×{DIFFICULTY_SIZE[d]}
-            </span>
+            {d} <span className="ml-1 text-[10px] opacity-60">{DIFFICULTY_SIZE[d]}×{DIFFICULTY_SIZE[d]}</span>
           </button>
         ))}
         <div className="ml-auto font-mono text-sm font-semibold text-gray-600 dark:text-blue-300 self-center tabular-nums">
@@ -910,10 +889,10 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         </div>
       </div>
 
-      {/* Sudoku grid */}
+      {/* Sudoku Grid */}
       <div className="relative">
         <div
-          className="grid border-2 border-gray-800 dark:border-blue-300 rounded-lg overflow-hidden"
+          className="grid border-2 border-gray-700 dark:border-blue-400/70 rounded-2xl overflow-hidden shadow-inner bg-gradient-to-br from-slate-950 to-zinc-950"
           style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
         >
           {board.map((val, i) => {
@@ -921,98 +900,43 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
             const c = i % size;
             const isSelected = i === selected;
             const isAffected = affectedBySelected.has(i) && !isSelected;
-            const isMatchingValue =
-              selectedValue > 0 && val === selectedValue && !isSelected;
+            const isMatchingValue = selectedValue > 0 && val === selectedValue && !isSelected;
             const isError = !given[i] && val > 0 && val !== solution[i];
 
             const thickRight = (c + 1) % boxC === 0 && c !== size - 1;
             const thickBottom = (r + 1) % boxR === 0 && r !== size - 1;
-            const borderR = thickRight
-              ? "border-r-2 border-r-gray-800 dark:border-r-blue-300"
-              : "border-r border-r-gray-300 dark:border-r-blue-800/50";
-            const borderB = thickBottom
-              ? "border-b-2 border-b-gray-800 dark:border-b-blue-300"
-              : "border-b border-b-gray-300 dark:border-b-blue-800/50";
 
             return (
               <button
                 key={i}
                 onClick={() => setSelected(isSelected ? null : i)}
-                className={`aspect-square flex items-center justify-center relative select-none transition-colors duration-100
-                  ${borderR} ${borderB}
-                  ${
-                    isSelected
-                      ? "bg-blue-400/40 dark:bg-blue-500/40"
-                      : isMatchingValue
-                        ? "bg-blue-200/70 dark:bg-blue-700/40"
-                        : isAffected
-                          ? "bg-gray-100/80 dark:bg-blue-950/60"
-                          : "bg-white/70 dark:bg-slate-800/70"
+                className={`aspect-square flex items-center justify-center relative select-none transition-all duration-200
+                  ${thickRight ? "border-r-2 border-r-blue-400/70" : "border-r border-r-blue-900/30"}
+                  ${thickBottom ? "border-b-2 border-b-blue-400/70" : "border-b border-b-blue-900/30"}
+                  ${isSelected
+                    ? "bg-gradient-to-br from-violet-500/40 to-fuchsia-500/40 shadow-[0_0_25px_#a855f7]"
+                    : isMatchingValue
+                      ? "bg-gradient-to-br from-blue-400/30 to-cyan-400/30"
+                      : isAffected
+                        ? "bg-gradient-to-br from-slate-800/80 to-blue-950/60"
+                        : "bg-gradient-to-br from-slate-900 to-zinc-950 hover:from-slate-800 hover:to-zinc-900"
                   }`}
               >
                 {val > 0 ? (
                   <motion.span
-                    className={`font-semibold leading-none
-                      ${
-                        size === 6
-                          ? "text-[clamp(12px,3.5vw,22px)]"
-                          : size === 9
-                            ? "text-[clamp(10px,2.5vw,18px)]"
-                            : "text-[clamp(7px,1.6vw,13px)]"
-                      }
-                      ${
-                        given[i]
-                          ? "text-gray-800 dark:text-white"
-                          : isError
-                            ? "text-red-500 dark:text-red-400"
-                            : "text-blue-600 dark:text-blue-300"
-                      }`}
-                    animate={
-                      shakingCell === i
-                        ? {
-                            x: [0, -6, 6, -5, 5, -3, 3, 0],
-                            color: [
-                              "#ef4444",
-                              "#ef4444",
-                              "#ef4444",
-                              "#ef4444",
-                              "#ef4444",
-                              "#ef4444",
-                              "#ef4444",
-                              "inherit",
-                            ],
-                          }
-                        : {}
-                    }
-                    transition={{ duration: 0.45, ease: "easeInOut" }}
+                    className={`font-semibold leading-none ${size === 6 ? "text-[clamp(14px,4vw,26px)]" : size === 9 ? "text-[clamp(12px,3vw,22px)]" : "text-[clamp(9px,2.2vw,16px)]"}
+                      ${given[i] ? "text-white" : isError ? "text-red-400" : "text-blue-100"}`}
+                    animate={shakingCell === i ? { x: [0, -8, 8, -6, 6, -3, 3, 0] } : {}}
                   >
                     {val}
                   </motion.span>
                 ) : notes[i] && notes[i].size > 0 ? (
-                  <div
-                    className="grid w-full h-full p-[1px]"
-                    style={{
-                      gridTemplateColumns: `repeat(${noteGridCols}, 1fr)`,
-                    }}
-                  >
-                    {Array.from({ length: size }, (_, idx) => idx + 1).map(
-                      (n) => (
-                        <span
-                          key={n}
-                          className={`flex items-center justify-center font-medium leading-none
-                            ${
-                              size === 6
-                                ? "text-[clamp(5px,1.4vw,10px)]"
-                                : size === 9
-                                  ? "text-[clamp(4px,1.1vw,8px)]"
-                                  : "text-[clamp(3px,0.8vw,6px)]"
-                            }
-                            text-gray-400 dark:text-blue-500`}
-                        >
-                          {notes[i].has(n) ? n : ""}
-                        </span>
-                      ),
-                    )}
+                  <div className="grid w-full h-full p-1" style={{ gridTemplateColumns: `repeat(${noteGridCols}, 1fr)` }}>
+                    {Array.from({ length: size }, (_, idx) => idx + 1).map((n) => (
+                      <span key={n} className="flex items-center justify-center text-xs font-medium text-blue-400/70">
+                        {notes[i].has(n) ? n : ""}
+                      </span>
+                    ))}
                   </div>
                 ) : null}
               </button>
@@ -1020,41 +944,51 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
           })}
         </div>
 
-        {/* Win / loss overlay */}
+        {/* Enhanced Gradient Overlay for Win / Game Over */}
         <AnimatePresence>
           {finished && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 rounded-lg flex items-center justify-center"
-              style={{ background: "rgba(0,0,0,0.55)" }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 rounded-2xl flex items-center justify-center overflow-hidden"
             >
+              {/* Flowing Gradient Background */}
               <motion.div
-                initial={{ scale: 0.7, y: 20 }}
+                className="absolute inset-0 bg-[radial-gradient(at_center,#7c3aed_10%,#c026d3_50%,#22d3ee_90%)]"
+                animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+                transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+              />
+
+              <motion.div
+                initial={{ scale: 0.7, y: 40 }}
                 animate={{ scale: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-8 text-center shadow-2xl mx-4"
+                transition={{ type: "spring", stiffness: 280, damping: 25 }}
+                className="bg-slate-950/95 backdrop-blur-xl rounded-3xl p-10 text-center shadow-2xl border border-white/10 relative z-10 w-full max-w-sm mx-4"
               >
-                <div className="text-5xl mb-3">{isWon ? "🎉" : "💔"}</div>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
-                  {isWon ? "Puzzle Solved!" : "Game Over"}
+                <div className="text-8xl mb-6">
+                  {isWon ? "🎉" : "💔"}
+                </div>
+
+                <h2 className="text-5xl font-bold bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent mb-2 tracking-tighter">
+                  {isWon ? "Puzzle Mastered!" : "Game Over"}
                 </h2>
-                <p className="text-gray-500 dark:text-blue-300 text-sm mb-1">
-                  {isWon ? `Time: ${formatTime(elapsed)}` : "Too many mistakes"}
+
+                <p className="text-slate-400 mb-6">
+                  {isWon 
+                    ? `Solved in ${formatTime(elapsed)}` 
+                    : "Too many mistakes. Better luck next time!"}
                 </p>
-                {isWon && (
-                  <p className="text-gray-400 dark:text-blue-400 text-xs mb-4">
-                    {hintsUsed > 0
-                      ? `${hintsUsed} hint${hintsUsed > 1 ? "s" : ""} used`
-                      : "No hints used!"}{" "}
-                    · {mistakes} mistake{mistakes !== 1 ? "s" : ""}
-                  </p>
+
+                {isWon && hintsUsed === 0 && (
+                  <p className="text-emerald-400 text-sm mb-6">Perfect run — no hints used!</p>
                 )}
+
                 <button
                   onClick={() => startGame(difficulty)}
-                  className="mt-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-all"
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-500 hover:brightness-110 text-white font-semibold text-lg shadow-xl transition-all active:scale-95"
                 >
-                  New Puzzle
+                  Play Again
                 </button>
               </motion.div>
             </motion.div>
@@ -1062,26 +996,19 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         </AnimatePresence>
       </div>
 
-      {/* Numpad */}
+      {/* Numpad + Controls (unchanged) */}
       <div className="flex flex-col gap-1.5 mt-3">
         {numpadRows.map((row, rowIdx) => (
-          <div
-            key={rowIdx}
-            className="grid gap-1.5"
-            style={{ gridTemplateColumns: `repeat(${row.length}, 1fr)` }}
-          >
+          <div key={rowIdx} className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${row.length}, 1fr)` }}>
             {row.map((n) => (
               <button
                 key={n}
                 onClick={() => enterNumber(n)}
                 disabled={digitCounts[n] >= size}
-                className={`aspect-square rounded-xl font-semibold border transition-all
-                  ${size === 12 ? "text-xs" : "text-base"}
-                  ${
-                    digitCounts[n] >= size
-                      ? "opacity-20 cursor-not-allowed border-gray-200 dark:border-blue-900"
-                      : "border-gray-300 dark:border-blue-700 text-gray-700 dark:text-blue-200 hover:bg-blue-50/80 dark:hover:bg-blue-900/40 active:scale-95 bg-white/60 dark:bg-slate-800/60"
-                  }`}
+                className={`aspect-square rounded-xl font-semibold border transition-all text-base
+                  ${digitCounts[n] >= size
+                    ? "opacity-20 cursor-not-allowed border-gray-700"
+                    : "border-blue-700/50 text-blue-200 hover:bg-blue-900/60 bg-slate-800/80"}`}
               >
                 {n}
               </button>
@@ -1090,58 +1017,25 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         ))}
       </div>
 
-      {/* Controls row */}
       <div className="flex items-center gap-2 mt-3">
-        <button
-          onClick={erase}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all"
-        >
-          <Eraser size={14} /> Erase
+        <button onClick={erase} className="flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl border border-gray-600 text-gray-300 hover:bg-slate-800">
+          <Eraser size={16} /> Erase
+        </button>
+        <button onClick={undo} className="flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl border border-gray-600 text-gray-300 hover:bg-slate-800">
+          <Undo2 size={16} /> Undo
         </button>
         <button
-          onClick={undo}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all"
+          onClick={() => setNoteMode(m => !m)}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl border transition-all ${noteMode ? "bg-violet-600 border-violet-500 text-white" : "border-gray-600 text-gray-300 hover:bg-slate-800"}`}
         >
-          <Undo2 size={14} /> Undo
+          <PenLine size={16} /> Notes
         </button>
-        <button
-          onClick={() => {
-            setNoteMode((m) => !m);
-            play("buttonClick");
-          }}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border transition-all
-            ${
-              noteMode
-                ? "bg-blue-500/20 border-blue-400 text-blue-700 dark:text-blue-300"
-                : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40"
-            }`}
-        >
-          <PenLine size={14} /> Notes
+        <button onClick={hint} className="flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl border border-gray-600 text-gray-300 hover:bg-slate-800">
+          <Lightbulb size={16} /> Hint
         </button>
-        <button
-          onClick={hint}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all"
-        >
-          <Lightbulb size={14} /> Hint
+        <button onClick={() => startGame(difficulty)} className="flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl border border-gray-600 text-gray-300 hover:bg-slate-800 ml-auto">
+          <RotateCcw size={16} /> New
         </button>
-        <button
-          onClick={() => startGame(difficulty)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all ml-auto"
-        >
-          <RotateCcw size={14} /> New
-        </button>
-
-        {/* Mistake dots */}
-        <div className="flex items-center gap-1">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className={`w-2.5 h-2.5 rounded-full ${
-                i < mistakes ? "bg-red-500" : "bg-gray-300 dark:bg-blue-900"
-              }`}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );
