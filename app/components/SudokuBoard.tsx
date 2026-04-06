@@ -7,10 +7,14 @@
 //   isBoardComplete,
 //   getAffectedIndices,
 //   formatTime,
+//   BOX_DIMS,
+//   DIFFICULTY_SIZE,
 //   type Difficulty,
+//   type BoardSize,
 // } from "@/lib/sudoku";
 // import { useSoundManager } from "@/hooks/useSoundManager";
 // import { RotateCcw, Lightbulb, PenLine, Eraser } from "lucide-react";
+// import confetti from "canvas-confetti";
 
 // const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard", "expert"];
 // const MAX_MISTAKES = 3;
@@ -32,8 +36,11 @@
 //   const [board, setBoard] = useState(puzzle.board);
 //   const [solution, setSolution] = useState(puzzle.solution);
 //   const [given, setGiven] = useState(puzzle.given);
+//   const [size, setSize] = useState<BoardSize>(puzzle.size);
 //   const [notes, setNotes] = useState<Set<number>[]>(() =>
-//     Array(81).fill(null).map(() => new Set<number>())
+//     Array(puzzle.size * puzzle.size)
+//       .fill(null)
+//       .map(() => new Set<number>()),
 //   );
 //   const [selected, setSelected] = useState<number | null>(null);
 //   const [noteMode, setNoteMode] = useState(false);
@@ -42,24 +49,33 @@
 //   const [elapsed, setElapsed] = useState(0);
 //   const [started, setStarted] = useState(false);
 //   const [finished, setFinished] = useState(false);
+//   const [shakingCell, setShakingCell] = useState<number | null>(null);
 //   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-//   const startGame = useCallback((diff: Difficulty) => {
-//     const newPuzzle = generatePuzzle(diff);
-//     setBoard(newPuzzle.board);
-//     setSolution(newPuzzle.solution);
-//     setGiven(newPuzzle.given);
-//     setNotes(Array(81).fill(null).map(() => new Set<number>()));
-//     setSelected(null);
-//     setNoteMode(false);
-//     setMistakes(0);
-//     setHintsUsed(0);
-//     setElapsed(0);
-//     setStarted(false);
-//     setFinished(false);
-//     clearInterval(timerRef.current!);
-//     play("gameStart");
-//   }, [play]);
+//   const startGame = useCallback(
+//     (diff: Difficulty) => {
+//       const newPuzzle = generatePuzzle(diff);
+//       setBoard(newPuzzle.board);
+//       setSolution(newPuzzle.solution);
+//       setGiven(newPuzzle.given);
+//       setSize(newPuzzle.size);
+//       setNotes(
+//         Array(newPuzzle.size * newPuzzle.size)
+//           .fill(null)
+//           .map(() => new Set<number>()),
+//       );
+//       setSelected(null);
+//       setNoteMode(false);
+//       setMistakes(0);
+//       setHintsUsed(0);
+//       setElapsed(0);
+//       setStarted(false);
+//       setFinished(false);
+//       clearInterval(timerRef.current!);
+//       play("gameStart");
+//     },
+//     [play],
+//   );
 
 //   useEffect(() => {
 //     if (started && !finished) {
@@ -98,10 +114,12 @@
 
 //       if (n !== solution[selected]) {
 //         const newMistakes = mistakes + 1;
-//         play("cardDraw"); // mistake sound
+//         play("cardDraw");
 //         setMistakes(newMistakes);
 //         setBoard(newBoard);
 //         setNotes(newNotes);
+//         setShakingCell(selected);
+//         setTimeout(() => setShakingCell(null), 500);
 //         if (newMistakes >= MAX_MISTAKES) {
 //           setFinished(true);
 //           clearInterval(timerRef.current!);
@@ -110,10 +128,41 @@
 //         return;
 //       }
 
-//       play("cardDeal"); // correct placement
-//       const affected = getAffectedIndices(selected);
-//       for (const idx of affected) newNotes[idx].delete(n);
+//       const fireConfetti = () => {
+//         const count = 200;
+//         const defaults = { origin: { y: 0.7 } };
 
+//         function fire(particleRatio: number, opts: confetti.Options) {
+//           confetti({
+//             ...defaults,
+//             ...opts,
+//             particleCount: Math.floor(count * particleRatio),
+//           });
+//         }
+
+//         fire(0.25, {
+//           spread: 26,
+//           startVelocity: 55,
+//           colors: ["#2563eb", "#60a5fa"],
+//         });
+//         fire(0.2, { spread: 60, colors: ["#ffffff", "#93c5fd"] });
+//         fire(0.35, {
+//           spread: 100,
+//           decay: 0.91,
+//           scalar: 0.8,
+//           colors: ["#2563eb", "#1d4ed8"],
+//         });
+//         fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+//         fire(0.1, {
+//           spread: 120,
+//           startVelocity: 45,
+//           colors: ["#60a5fa", "#ffffff"],
+//         });
+//       };
+
+//       play("cardDeal");
+//       const affected = getAffectedIndices(selected, size);
+//       for (const idx of affected) newNotes[idx].delete(n);
 //       setBoard(newBoard);
 //       setNotes(newNotes);
 
@@ -122,9 +171,26 @@
 //         clearInterval(timerRef.current!);
 //         play("win");
 //         onComplete?.(elapsed + 1, hintsUsed, mistakes, difficulty);
+//         fireConfetti();
 //       }
 //     },
-//     [selected, given, finished, started, noteMode, board, notes, solution, mistakes, hintsUsed, elapsed, difficulty, onComplete, play],
+//     [
+//       selected,
+//       given,
+//       finished,
+//       started,
+//       noteMode,
+//       board,
+//       notes,
+//       solution,
+//       size,
+//       mistakes,
+//       hintsUsed,
+//       elapsed,
+//       difficulty,
+//       onComplete,
+//       play,
+//     ],
 //   );
 
 //   const erase = useCallback(() => {
@@ -146,63 +212,104 @@
 //     const newGiven = [...given];
 //     newGiven[selected] = true;
 //     const newNotes = notes.map((s) => new Set(s));
-//     const affected = getAffectedIndices(selected);
+//     const affected = getAffectedIndices(selected, size);
 //     for (const idx of affected) newNotes[idx].delete(solution[selected]);
 //     setBoard(newBoard);
 //     setGiven(newGiven);
 //     setNotes(newNotes);
 //     setHintsUsed((h) => h + 1);
-//     play("roomJoin"); // hint reveal sound
+//     play("roomJoin");
 //     if (isBoardComplete(newBoard, solution)) {
 //       setFinished(true);
 //       clearInterval(timerRef.current!);
 //       play("win");
 //       onComplete?.(elapsed + 1, hintsUsed + 1, mistakes, difficulty);
 //     }
-//   }, [selected, given, finished, started, board, solution, notes, elapsed, hintsUsed, mistakes, difficulty, onComplete, play]);
+//   }, [
+//     selected,
+//     given,
+//     finished,
+//     started,
+//     board,
+//     solution,
+//     notes,
+//     size,
+//     elapsed,
+//     hintsUsed,
+//     mistakes,
+//     difficulty,
+//     onComplete,
+//     play,
+//   ]);
 
 //   useEffect(() => {
 //     const handler = (e: KeyboardEvent) => {
-//       if (e.key >= "1" && e.key <= "9") enterNumber(Number(e.key));
+//       const num = Number(e.key);
+//       if (num >= 1 && num <= size) enterNumber(num);
 //       if (e.key === "Backspace" || e.key === "Delete") erase();
 //       if (e.key === "n" || e.key === "N") setNoteMode((m) => !m);
 //       if (selected === null) return;
-//       const r = Math.floor(selected / 9);
-//       const c = selected % 9;
-//       if (e.key === "ArrowRight" && c < 8) setSelected(selected + 1);
+//       const r = Math.floor(selected / size);
+//       const c = selected % size;
+//       if (e.key === "ArrowRight" && c < size - 1) setSelected(selected + 1);
 //       if (e.key === "ArrowLeft" && c > 0) setSelected(selected - 1);
-//       if (e.key === "ArrowDown" && r < 8) setSelected(selected + 9);
-//       if (e.key === "ArrowUp" && r > 0) setSelected(selected - 9);
+//       if (e.key === "ArrowDown" && r < size - 1) setSelected(selected + size);
+//       if (e.key === "ArrowUp" && r > 0) setSelected(selected - size);
 //     };
 //     window.addEventListener("keydown", handler);
 //     return () => window.removeEventListener("keydown", handler);
-//   }, [enterNumber, erase, selected]);
+//   }, [enterNumber, erase, selected, size]);
 
 //   const isWon = finished && mistakes < MAX_MISTAKES;
 
-//   const digitCounts = Array(10).fill(0);
-//   board.forEach((v) => { if (v) digitCounts[v]++; });
+//   // Count how many of each digit are placed (to grey out full digits in numpad)
+//   const digitCounts = Array(size + 1).fill(0);
+//   board.forEach((v) => {
+//     if (v) digitCounts[v]++;
+//   });
 
 //   const affectedBySelected =
-//     selected !== null ? new Set(getAffectedIndices(selected)) : new Set<number>();
+//     selected !== null
+//       ? new Set(getAffectedIndices(selected, size))
+//       : new Set<number>();
 //   const selectedValue = selected !== null ? board[selected] : 0;
+
+//   // Box dimensions for border logic
+//   const [boxR, boxC] = BOX_DIMS[size];
+
+//   // Notes grid columns — √size for 9×9 (3), 2 rows for 6×6, 3 rows for 12×12
+//   const noteGridCols = boxC; // notes mini-grid always matches box column count
+
+//   // Numpad: split into rows of 6 max for larger boards
+//   const numpadNumbers = Array.from({ length: size }, (_, i) => i + 1);
+//   const numpadRows: number[][] = [];
+//   const ROW_SIZE = size <= 9 ? size : 6;
+//   for (let i = 0; i < numpadNumbers.length; i += ROW_SIZE) {
+//     numpadRows.push(numpadNumbers.slice(i, i + ROW_SIZE));
+//   }
 
 //   return (
 //     <div className="rounded-2xl overflow-hidden backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border border-white/30 dark:border-white/10 shadow-2xl p-4">
-
 //       {/* Difficulty + timer row */}
 //       <div className="flex gap-2 mb-4 flex-wrap">
 //         {DIFFICULTIES.map((d) => (
 //           <button
 //             key={d}
-//             onClick={() => { setDifficulty(d); startGame(d); }}
+//             onClick={() => {
+//               setDifficulty(d);
+//               startGame(d);
+//             }}
 //             className={`px-4 py-1.5 rounded-xl text-sm font-medium capitalize transition-all border
-//               ${difficulty === d
-//                 ? "bg-blue-600 text-white border-blue-600"
-//                 : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"
+//               ${
+//                 difficulty === d
+//                   ? "bg-blue-600 text-white border-blue-600"
+//                   : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"
 //               }`}
 //           >
 //             {d}
+//             <span className="ml-1 text-[10px] opacity-60">
+//               {DIFFICULTY_SIZE[d]}×{DIFFICULTY_SIZE[d]}
+//             </span>
 //           </button>
 //         ))}
 //         <div className="ml-auto font-mono text-sm font-semibold text-gray-600 dark:text-blue-300 self-center tabular-nums">
@@ -214,23 +321,26 @@
 //       <div className="relative">
 //         <div
 //           className="grid border-2 border-gray-800 dark:border-blue-300 rounded-lg overflow-hidden"
-//           style={{ gridTemplateColumns: "repeat(9, 1fr)" }}
+//           style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
 //         >
 //           {board.map((val, i) => {
-//             const r = Math.floor(i / 9);
-//             const c = i % 9;
+//             const r = Math.floor(i / size);
+//             const c = i % size;
 //             const isSelected = i === selected;
 //             const isAffected = affectedBySelected.has(i) && !isSelected;
-//             const isMatchingValue = selectedValue > 0 && val === selectedValue && !isSelected;
+//             const isMatchingValue =
+//               selectedValue > 0 && val === selectedValue && !isSelected;
 //             const isError = !given[i] && val > 0 && val !== solution[i];
-//             const borderR =
-//               c === 2 || c === 5
-//                 ? "border-r-2 border-r-gray-800 dark:border-r-blue-300"
-//                 : "border-r border-r-gray-300 dark:border-r-blue-800/50";
-//             const borderB =
-//               r === 2 || r === 5
-//                 ? "border-b-2 border-b-gray-800 dark:border-b-blue-300"
-//                 : "border-b border-b-gray-300 dark:border-b-blue-800/50";
+
+//             // Thick borders at box boundaries
+//             const thickRight = (c + 1) % boxC === 0 && c !== size - 1;
+//             const thickBottom = (r + 1) % boxR === 0 && r !== size - 1;
+//             const borderR = thickRight
+//               ? "border-r-2 border-r-gray-800 dark:border-r-blue-300"
+//               : "border-r border-r-gray-300 dark:border-r-blue-800/50";
+//             const borderB = thickBottom
+//               ? "border-b-2 border-b-gray-800 dark:border-b-blue-300"
+//               : "border-b border-b-gray-300 dark:border-b-blue-800/50";
 
 //             return (
 //               <button
@@ -238,37 +348,65 @@
 //                 onClick={() => setSelected(isSelected ? null : i)}
 //                 className={`aspect-square flex items-center justify-center relative select-none transition-colors duration-100
 //                   ${borderR} ${borderB}
-//                   ${isSelected
-//                     ? "bg-blue-400/40 dark:bg-blue-500/40"
-//                     : isMatchingValue
-//                     ? "bg-blue-200/70 dark:bg-blue-700/40"
-//                     : isAffected
-//                     ? "bg-gray-100/80 dark:bg-blue-950/60"
-//                     : "bg-white/70 dark:bg-slate-800/70"
+//                   ${
+//                     isSelected
+//                       ? "bg-blue-400/40 dark:bg-blue-500/40"
+//                       : isMatchingValue
+//                         ? "bg-blue-200/70 dark:bg-blue-700/40"
+//                         : isAffected
+//                           ? "bg-gray-100/80 dark:bg-blue-950/60"
+//                           : "bg-white/70 dark:bg-slate-800/70"
 //                   }`}
 //               >
 //                 {val > 0 ? (
-//                   <span
-//                     className={`font-semibold leading-none text-[clamp(12px,3vw,20px)]
-//                       ${given[i]
-//                         ? "text-gray-800 dark:text-white"
-//                         : isError
-//                         ? "text-red-500 dark:text-red-400"
-//                         : "text-blue-600 dark:text-blue-300"
-//                       }`}
+//                   <motion.span
+//                     className={`font-semibold leading-none ...`}
+//                     animate={
+//                       shakingCell === i
+//                         ? {
+//                             x: [0, -6, 6, -5, 5, -3, 3, 0],
+//                             color: [
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "#ef4444",
+//                               "inherit",
+//                             ],
+//                           }
+//                         : {}
+//                     }
+//                     transition={{ duration: 0.45, ease: "easeInOut" }}
 //                   >
 //                     {val}
-//                   </span>
+//                   </motion.span>
 //                 ) : notes[i] && notes[i].size > 0 ? (
-//                   <div className="grid grid-cols-3 w-full h-full p-[1px]">
-//                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-//                       <span
-//                         key={n}
-//                         className="flex items-center justify-center text-[clamp(5px,1.2vw,9px)] text-gray-400 dark:text-blue-500 font-medium leading-none"
-//                       >
-//                         {notes[i].has(n) ? n : ""}
-//                       </span>
-//                     ))}
+//                   <div
+//                     className="grid w-full h-full p-[1px]"
+//                     style={{
+//                       gridTemplateColumns: `repeat(${noteGridCols}, 1fr)`,
+//                     }}
+//                   >
+//                     {Array.from({ length: size }, (_, idx) => idx + 1).map(
+//                       (n) => (
+//                         <span
+//                           key={n}
+//                           className={`flex items-center justify-center font-medium leading-none
+//                           ${
+//                             size === 6
+//                               ? "text-[clamp(5px,1.4vw,10px)]"
+//                               : size === 9
+//                                 ? "text-[clamp(4px,1.1vw,8px)]"
+//                                 : "text-[clamp(3px,0.8vw,6px)]"
+//                           }
+//                           text-gray-400 dark:text-blue-500`}
+//                         >
+//                           {notes[i].has(n) ? n : ""}
+//                         </span>
+//                       ),
+//                     )}
 //                   </div>
 //                 ) : null}
 //               </button>
@@ -318,21 +456,31 @@
 //         </AnimatePresence>
 //       </div>
 
-//       {/* Numpad */}
-//       <div className="grid grid-cols-9 gap-1.5 mt-3">
-//         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-//           <button
-//             key={n}
-//             onClick={() => enterNumber(n)}
-//             disabled={digitCounts[n] >= 9}
-//             className={`aspect-square rounded-xl text-base font-semibold border transition-all
-//               ${digitCounts[n] >= 9
-//                 ? "opacity-20 cursor-not-allowed border-gray-200 dark:border-blue-900"
-//                 : "border-gray-300 dark:border-blue-700 text-gray-700 dark:text-blue-200 hover:bg-blue-50/80 dark:hover:bg-blue-900/40 active:scale-95 bg-white/60 dark:bg-slate-800/60"
-//               }`}
+//       {/* Numpad — single row for 6/9, two rows of 6 for 12 */}
+//       <div className="flex flex-col gap-1.5 mt-3">
+//         {numpadRows.map((row, rowIdx) => (
+//           <div
+//             key={rowIdx}
+//             className="grid gap-1.5"
+//             style={{ gridTemplateColumns: `repeat(${row.length}, 1fr)` }}
 //           >
-//             {n}
-//           </button>
+//             {row.map((n) => (
+//               <button
+//                 key={n}
+//                 onClick={() => enterNumber(n)}
+//                 disabled={digitCounts[n] >= size}
+//                 className={`aspect-square rounded-xl font-semibold border transition-all
+//                   ${size === 12 ? "text-xs" : "text-base"}
+//                   ${
+//                     digitCounts[n] >= size
+//                       ? "opacity-20 cursor-not-allowed border-gray-200 dark:border-blue-900"
+//                       : "border-gray-300 dark:border-blue-700 text-gray-700 dark:text-blue-200 hover:bg-blue-50/80 dark:hover:bg-blue-900/40 active:scale-95 bg-white/60 dark:bg-slate-800/60"
+//                   }`}
+//               >
+//                 {n}
+//               </button>
+//             ))}
+//           </div>
 //         ))}
 //       </div>
 
@@ -345,11 +493,15 @@
 //           <Eraser size={14} /> Erase
 //         </button>
 //         <button
-//           onClick={() => { setNoteMode((m) => !m); play("buttonClick"); }}
+//           onClick={() => {
+//             setNoteMode((m) => !m);
+//             play("buttonClick");
+//           }}
 //           className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border transition-all
-//             ${noteMode
-//               ? "bg-blue-500/20 border-blue-400 text-blue-700 dark:text-blue-300"
-//               : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40"
+//             ${
+//               noteMode
+//                 ? "bg-blue-500/20 border-blue-400 text-blue-700 dark:text-blue-300"
+//                 : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40"
 //             }`}
 //         >
 //           <PenLine size={14} /> Notes
@@ -381,10 +533,7 @@
 //     </div>
 //   );
 // }
-
-
 "use client";
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -398,7 +547,8 @@ import {
   type BoardSize,
 } from "@/lib/sudoku";
 import { useSoundManager } from "@/hooks/useSoundManager";
-import { RotateCcw, Lightbulb, PenLine, Eraser } from "lucide-react";
+import { RotateCcw, Lightbulb, PenLine, Eraser, Undo2 } from "lucide-react";
+import confetti from "canvas-confetti";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard", "expert"];
 const MAX_MISTAKES = 3;
@@ -422,7 +572,9 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
   const [given, setGiven] = useState(puzzle.given);
   const [size, setSize] = useState<BoardSize>(puzzle.size);
   const [notes, setNotes] = useState<Set<number>[]>(() =>
-    Array(puzzle.size * puzzle.size).fill(null).map(() => new Set<number>())
+    Array(puzzle.size * puzzle.size)
+      .fill(null)
+      .map(() => new Set<number>()),
   );
   const [selected, setSelected] = useState<number | null>(null);
   const [noteMode, setNoteMode] = useState(false);
@@ -431,29 +583,95 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [shakingCell, setShakingCell] = useState<number | null>(null);
 
-  const startGame = useCallback((diff: Difficulty) => {
-    const newPuzzle = generatePuzzle(diff);
-    setBoard(newPuzzle.board);
-    setSolution(newPuzzle.solution);
-    setGiven(newPuzzle.given);
-    setSize(newPuzzle.size);
-    setNotes(
-      Array(newPuzzle.size * newPuzzle.size)
-        .fill(null)
-        .map(() => new Set<number>())
-    );
-    setSelected(null);
-    setNoteMode(false);
-    setMistakes(0);
-    setHintsUsed(0);
-    setElapsed(0);
-    setStarted(false);
-    setFinished(false);
-    clearInterval(timerRef.current!);
-    play("gameStart");
-  }, [play]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const historyRef = useRef<
+    Array<{
+      board: number[];
+      notes: Set<number>[];
+      mistakes: number;
+      cellIndex: number;
+    }>
+  >([]);
+
+  // ====================== CONFETTI FIX ======================
+  const fireConfetti = useCallback(() => {
+    const count = 200;
+    const defaults = { origin: { y: 0.7 } };
+
+    function fire(particleRatio: number, opts: confetti.Options) {
+      confetti({
+        ...defaults,
+        ...opts,
+        particleCount: Math.floor(count * particleRatio),
+      });
+    }
+
+    fire(0.25, {
+      spread: 26,
+      startVelocity: 55,
+      colors: ["#2563eb", "#60a5fa"],
+    });
+    fire(0.2, { spread: 60, colors: ["#ffffff", "#93c5fd"] });
+    fire(0.35, {
+      spread: 100,
+      decay: 0.91,
+      scalar: 0.8,
+      colors: ["#2563eb", "#1d4ed8"],
+    });
+    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 45,
+      colors: ["#60a5fa", "#ffffff"],
+    });
+  }, []);
+
+  // Ref ensures we always call the latest confetti function
+  const fireConfettiRef = useRef<() => void>(fireConfetti);
+
+  useEffect(() => {
+    fireConfettiRef.current = fireConfetti;
+  }, [fireConfetti]);
+
+  // Trigger confetti when the puzzle is won
+  useEffect(() => {
+    if (finished && mistakes < MAX_MISTAKES) {
+      // Small delay so the win overlay renders first
+      const timeout = setTimeout(() => {
+        fireConfettiRef.current();
+      }, 150);
+      return () => clearTimeout(timeout);
+    }
+  }, [finished, mistakes]);
+  // =========================================================
+
+  const startGame = useCallback(
+    (diff: Difficulty) => {
+      const newPuzzle = generatePuzzle(diff);
+      setBoard(newPuzzle.board);
+      setSolution(newPuzzle.solution);
+      setGiven(newPuzzle.given);
+      setSize(newPuzzle.size);
+      setNotes(
+        Array(newPuzzle.size * newPuzzle.size)
+          .fill(null)
+          .map(() => new Set<number>()),
+      );
+      setSelected(null);
+      setNoteMode(false);
+      setMistakes(0);
+      setHintsUsed(0);
+      setElapsed(0);
+      setStarted(false);
+      setFinished(false);
+      clearInterval(timerRef.current!);
+      historyRef.current = [];
+      play("gameStart");
+    },
+    [play],
+  );
 
   useEffect(() => {
     if (started && !finished) {
@@ -486,6 +704,15 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         return;
       }
 
+      // Save to history before making the move
+      historyRef.current.push({
+        board: [...board],
+        notes: notes.map((s) => new Set(s)),
+        mistakes,
+        cellIndex: selected,
+      });
+      if (historyRef.current.length > 50) historyRef.current.shift();
+
       newBoard[selected] = n;
       const newNotes = notes.map((s) => new Set(s));
       newNotes[selected].clear();
@@ -496,6 +723,9 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         setMistakes(newMistakes);
         setBoard(newBoard);
         setNotes(newNotes);
+        setShakingCell(selected);
+        setTimeout(() => setShakingCell(null), 500);
+
         if (newMistakes >= MAX_MISTAKES) {
           setFinished(true);
           clearInterval(timerRef.current!);
@@ -507,6 +737,7 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
       play("cardDeal");
       const affected = getAffectedIndices(selected, size);
       for (const idx of affected) newNotes[idx].delete(n);
+
       setBoard(newBoard);
       setNotes(newNotes);
 
@@ -515,9 +746,26 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         clearInterval(timerRef.current!);
         play("win");
         onComplete?.(elapsed + 1, hintsUsed, mistakes, difficulty);
+        // Confetti is now handled by useEffect
       }
     },
-    [selected, given, finished, started, noteMode, board, notes, solution, size, mistakes, hintsUsed, elapsed, difficulty, onComplete, play],
+    [
+      selected,
+      given,
+      finished,
+      started,
+      noteMode,
+      board,
+      notes,
+      solution,
+      size,
+      mistakes,
+      hintsUsed,
+      elapsed,
+      difficulty,
+      onComplete,
+      play,
+    ],
   );
 
   const erase = useCallback(() => {
@@ -531,9 +779,20 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
     play("buttonClick");
   }, [selected, given, finished, board, notes, play]);
 
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setBoard(prev.board);
+    setNotes(prev.notes);
+    setMistakes(prev.mistakes);
+    setSelected(prev.cellIndex);
+    play("buttonClick");
+  }, [play]);
+
   const hint = useCallback(() => {
     if (selected === null || given[selected] || finished) return;
     if (!started) setStarted(true);
+
     const newBoard = [...board];
     newBoard[selected] = solution[selected];
     const newGiven = [...given];
@@ -541,25 +800,49 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
     const newNotes = notes.map((s) => new Set(s));
     const affected = getAffectedIndices(selected, size);
     for (const idx of affected) newNotes[idx].delete(solution[selected]);
+
     setBoard(newBoard);
     setGiven(newGiven);
     setNotes(newNotes);
     setHintsUsed((h) => h + 1);
     play("roomJoin");
+
     if (isBoardComplete(newBoard, solution)) {
       setFinished(true);
       clearInterval(timerRef.current!);
       play("win");
       onComplete?.(elapsed + 1, hintsUsed + 1, mistakes, difficulty);
+      // Confetti handled by useEffect
     }
-  }, [selected, given, finished, started, board, solution, notes, size, elapsed, hintsUsed, mistakes, difficulty, onComplete, play]);
+  }, [
+    selected,
+    given,
+    finished,
+    started,
+    board,
+    solution,
+    notes,
+    size,
+    elapsed,
+    hintsUsed,
+    mistakes,
+    difficulty,
+    onComplete,
+    play,
+  ]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
       const num = Number(e.key);
       if (num >= 1 && num <= size) enterNumber(num);
       if (e.key === "Backspace" || e.key === "Delete") erase();
       if (e.key === "n" || e.key === "N") setNoteMode((m) => !m);
+
       if (selected === null) return;
       const r = Math.floor(selected / size);
       const c = selected % size;
@@ -568,27 +851,29 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
       if (e.key === "ArrowDown" && r < size - 1) setSelected(selected + size);
       if (e.key === "ArrowUp" && r > 0) setSelected(selected - size);
     };
+
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [enterNumber, erase, selected, size]);
+  }, [enterNumber, erase, undo, selected, size]);
 
   const isWon = finished && mistakes < MAX_MISTAKES;
 
-  // Count how many of each digit are placed (to grey out full digits in numpad)
+  // Count how many of each digit are placed
   const digitCounts = Array(size + 1).fill(0);
-  board.forEach((v) => { if (v) digitCounts[v]++; });
+  board.forEach((v) => {
+    if (v) digitCounts[v]++;
+  });
 
   const affectedBySelected =
-    selected !== null ? new Set(getAffectedIndices(selected, size)) : new Set<number>();
+    selected !== null
+      ? new Set(getAffectedIndices(selected, size))
+      : new Set<number>();
+
   const selectedValue = selected !== null ? board[selected] : 0;
 
-  // Box dimensions for border logic
   const [boxR, boxC] = BOX_DIMS[size];
+  const noteGridCols = boxC;
 
-  // Notes grid columns — √size for 9×9 (3), 2 rows for 6×6, 3 rows for 12×12
-  const noteGridCols = boxC; // notes mini-grid always matches box column count
-
-  // Numpad: split into rows of 6 max for larger boards
   const numpadNumbers = Array.from({ length: size }, (_, i) => i + 1);
   const numpadRows: number[][] = [];
   const ROW_SIZE = size <= 9 ? size : 6;
@@ -598,17 +883,20 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
 
   return (
     <div className="rounded-2xl overflow-hidden backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border border-white/30 dark:border-white/10 shadow-2xl p-4">
-
       {/* Difficulty + timer row */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {DIFFICULTIES.map((d) => (
           <button
             key={d}
-            onClick={() => { setDifficulty(d); startGame(d); }}
+            onClick={() => {
+              setDifficulty(d);
+              startGame(d);
+            }}
             className={`px-4 py-1.5 rounded-xl text-sm font-medium capitalize transition-all border
-              ${difficulty === d
-                ? "bg-blue-600 text-white border-blue-600"
-                : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"
+              ${
+                difficulty === d
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/40"
               }`}
           >
             {d}
@@ -633,10 +921,10 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
             const c = i % size;
             const isSelected = i === selected;
             const isAffected = affectedBySelected.has(i) && !isSelected;
-            const isMatchingValue = selectedValue > 0 && val === selectedValue && !isSelected;
+            const isMatchingValue =
+              selectedValue > 0 && val === selectedValue && !isSelected;
             const isError = !given[i] && val > 0 && val !== solution[i];
 
-            // Thick borders at box boundaries
             const thickRight = (c + 1) % boxC === 0 && c !== size - 1;
             const thickBottom = (r + 1) % boxR === 0 && r !== size - 1;
             const borderR = thickRight
@@ -652,53 +940,79 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
                 onClick={() => setSelected(isSelected ? null : i)}
                 className={`aspect-square flex items-center justify-center relative select-none transition-colors duration-100
                   ${borderR} ${borderB}
-                  ${isSelected
-                    ? "bg-blue-400/40 dark:bg-blue-500/40"
-                    : isMatchingValue
-                    ? "bg-blue-200/70 dark:bg-blue-700/40"
-                    : isAffected
-                    ? "bg-gray-100/80 dark:bg-blue-950/60"
-                    : "bg-white/70 dark:bg-slate-800/70"
+                  ${
+                    isSelected
+                      ? "bg-blue-400/40 dark:bg-blue-500/40"
+                      : isMatchingValue
+                        ? "bg-blue-200/70 dark:bg-blue-700/40"
+                        : isAffected
+                          ? "bg-gray-100/80 dark:bg-blue-950/60"
+                          : "bg-white/70 dark:bg-slate-800/70"
                   }`}
               >
                 {val > 0 ? (
-                  <span
+                  <motion.span
                     className={`font-semibold leading-none
-                      ${size === 6
-                        ? "text-[clamp(12px,3.5vw,22px)]"
-                        : size === 9
-                        ? "text-[clamp(10px,2.5vw,18px)]"
-                        : "text-[clamp(7px,1.6vw,13px)]"
+                      ${
+                        size === 6
+                          ? "text-[clamp(12px,3.5vw,22px)]"
+                          : size === 9
+                            ? "text-[clamp(10px,2.5vw,18px)]"
+                            : "text-[clamp(7px,1.6vw,13px)]"
                       }
-                      ${given[i]
-                        ? "text-gray-800 dark:text-white"
-                        : isError
-                        ? "text-red-500 dark:text-red-400"
-                        : "text-blue-600 dark:text-blue-300"
+                      ${
+                        given[i]
+                          ? "text-gray-800 dark:text-white"
+                          : isError
+                            ? "text-red-500 dark:text-red-400"
+                            : "text-blue-600 dark:text-blue-300"
                       }`}
+                    animate={
+                      shakingCell === i
+                        ? {
+                            x: [0, -6, 6, -5, 5, -3, 3, 0],
+                            color: [
+                              "#ef4444",
+                              "#ef4444",
+                              "#ef4444",
+                              "#ef4444",
+                              "#ef4444",
+                              "#ef4444",
+                              "#ef4444",
+                              "inherit",
+                            ],
+                          }
+                        : {}
+                    }
+                    transition={{ duration: 0.45, ease: "easeInOut" }}
                   >
                     {val}
-                  </span>
+                  </motion.span>
                 ) : notes[i] && notes[i].size > 0 ? (
                   <div
                     className="grid w-full h-full p-[1px]"
-                    style={{ gridTemplateColumns: `repeat(${noteGridCols}, 1fr)` }}
+                    style={{
+                      gridTemplateColumns: `repeat(${noteGridCols}, 1fr)`,
+                    }}
                   >
-                    {Array.from({ length: size }, (_, idx) => idx + 1).map((n) => (
-                      <span
-                        key={n}
-                        className={`flex items-center justify-center font-medium leading-none
-                          ${size === 6
-                            ? "text-[clamp(5px,1.4vw,10px)]"
-                            : size === 9
-                            ? "text-[clamp(4px,1.1vw,8px)]"
-                            : "text-[clamp(3px,0.8vw,6px)]"
-                          }
-                          text-gray-400 dark:text-blue-500`}
-                      >
-                        {notes[i].has(n) ? n : ""}
-                      </span>
-                    ))}
+                    {Array.from({ length: size }, (_, idx) => idx + 1).map(
+                      (n) => (
+                        <span
+                          key={n}
+                          className={`flex items-center justify-center font-medium leading-none
+                            ${
+                              size === 6
+                                ? "text-[clamp(5px,1.4vw,10px)]"
+                                : size === 9
+                                  ? "text-[clamp(4px,1.1vw,8px)]"
+                                  : "text-[clamp(3px,0.8vw,6px)]"
+                            }
+                            text-gray-400 dark:text-blue-500`}
+                        >
+                          {notes[i].has(n) ? n : ""}
+                        </span>
+                      ),
+                    )}
                   </div>
                 ) : null}
               </button>
@@ -748,7 +1062,7 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         </AnimatePresence>
       </div>
 
-      {/* Numpad — single row for 6/9, two rows of 6 for 12 */}
+      {/* Numpad */}
       <div className="flex flex-col gap-1.5 mt-3">
         {numpadRows.map((row, rowIdx) => (
           <div
@@ -763,9 +1077,10 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
                 disabled={digitCounts[n] >= size}
                 className={`aspect-square rounded-xl font-semibold border transition-all
                   ${size === 12 ? "text-xs" : "text-base"}
-                  ${digitCounts[n] >= size
-                    ? "opacity-20 cursor-not-allowed border-gray-200 dark:border-blue-900"
-                    : "border-gray-300 dark:border-blue-700 text-gray-700 dark:text-blue-200 hover:bg-blue-50/80 dark:hover:bg-blue-900/40 active:scale-95 bg-white/60 dark:bg-slate-800/60"
+                  ${
+                    digitCounts[n] >= size
+                      ? "opacity-20 cursor-not-allowed border-gray-200 dark:border-blue-900"
+                      : "border-gray-300 dark:border-blue-700 text-gray-700 dark:text-blue-200 hover:bg-blue-50/80 dark:hover:bg-blue-900/40 active:scale-95 bg-white/60 dark:bg-slate-800/60"
                   }`}
               >
                 {n}
@@ -784,11 +1099,21 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
           <Eraser size={14} /> Erase
         </button>
         <button
-          onClick={() => { setNoteMode((m) => !m); play("buttonClick"); }}
+          onClick={undo}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40 transition-all"
+        >
+          <Undo2 size={14} /> Undo
+        </button>
+        <button
+          onClick={() => {
+            setNoteMode((m) => !m);
+            play("buttonClick");
+          }}
           className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border transition-all
-            ${noteMode
-              ? "bg-blue-500/20 border-blue-400 text-blue-700 dark:text-blue-300"
-              : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40"
+            ${
+              noteMode
+                ? "bg-blue-500/20 border-blue-400 text-blue-700 dark:text-blue-300"
+                : "border-gray-300 dark:border-blue-700 text-gray-600 dark:text-blue-300 hover:bg-white/60 dark:hover:bg-blue-900/30 bg-white/40 dark:bg-slate-800/40"
             }`}
         >
           <PenLine size={14} /> Notes
@@ -805,6 +1130,7 @@ export function SudokuBoard({ onComplete }: SudokuBoardProps) {
         >
           <RotateCcw size={14} /> New
         </button>
+
         {/* Mistake dots */}
         <div className="flex items-center gap-1">
           {[0, 1, 2].map((i) => (
